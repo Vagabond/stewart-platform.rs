@@ -54,11 +54,14 @@ impl Stewart {
             stewart.p[i as usize][1] = phi_p.sin() * platform_radius as f32;
         }
         // compute the xy distance between both ends of the leg
-        let leganchordistance = (((stewart.p[0][0] - stewart.b[0][0]).powf(2.0)) - (stewart.p[0][1] - stewart.b[0][1]).powf(2.0)).abs().sqrt();
+        let leganchordistance = (((stewart.p[0][0] - stewart.b[0][0]).powf(2.0)) + (stewart.p[0][1] - stewart.b[0][1]).powf(2.0)).abs().sqrt();
         println!("leg anchor to anchor XY distance {}", leganchordistance);
         // compute the height of the right triangle 
-        // a^2 = c^2 - b^2
-        stewart.t0[2] = ((leg_length * leg_length) as f32 - leganchordistance * leganchordistance).abs().sqrt();
+        // a is xy distance between the anchors
+        // c is the length of the leg
+        // solve for b
+        // b = sqrt(c^2 - a^2)
+        stewart.t0[2] = ((leg_length * leg_length) as f32 - (leganchordistance * leganchordistance)).abs().sqrt();
         println!("t0 is {}", stewart.t0[2]);
         //stewart.t0[2] = 259.0;
         //println!("t0 is {}", stewart.t0[2]);
@@ -75,12 +78,19 @@ impl Stewart {
         stewart
     }
     pub fn update(&mut self, translation: Vector3<f32>, orientation: Quaternion<f32>) {
+        // for each leg calculate q and l
+        // q is the vector between the center of the base and the joint on the platform
+        // l is the vector between the two leg anchors
         for i in 0..6 {
+            // rotate the platform anchor point by the rotation vector
             let o = rotate_vector(orientation, self.p[i]);
+            // add the translation and the rotation together
             self.q[i][0] = translation[0] + o[0];
             self.q[i][1] = translation[1] + o[1];
             self.q[i][2] = translation[2] + o[2] + self.t0[2];
-
+            
+            // subtract the base anchor from the q vector
+            // l should now be between b and p points
             self.l[i][0] = self.q[i][0] - self.b[i][0];
             self.l[i][1] = self.q[i][1] - self.b[i][1];
             self.l[i][2] = self.q[i][2] - self.b[i][2];
@@ -91,6 +101,10 @@ impl Stewart {
         (self.l[leg][0].powf(2.0) + self.l[leg][1].powf(2.0) + self.l[leg][2].powf(2.0)).sqrt()
     }
 }
+
+// Rotates a vector according to the current quaternion, assumes |q|=1
+// https://raw.org/proof/vector-rotation-using-quaternions/
+// https://github.com/rawify/Quaternion.js/blob/master/quaternion.js#L1004
 
 fn rotate_vector(o: Quaternion<f32>, v: Vector3<f32>) -> Vector3<f32> {
     let qx = o[0];
@@ -107,6 +121,7 @@ fn rotate_vector(o: Quaternion<f32>, v: Vector3<f32>) -> Vector3<f32> {
     let ty = 2.0 * (qz * vx - qx * vz);
     let tz = 2.0 * (qx * vy - qy * vx);
 
+    // v + w t + q x t
     return Vector3::new(vx + qw * tx + qy * tz - qz * ty,
                         vy + qw * ty + qz * tx - qx * tz,
                         vz + qw * tz + qx * ty - qy * tx)
@@ -127,7 +142,7 @@ mod tests {
         println!("leg lengths {} {} {} {} {} {}", s.leg_length(0), s.leg_length(1), s.leg_length(2), s.leg_length(3), s.leg_length(4), s.leg_length(5));
         s.update(Vector3::new(0.0, 0.0, 0.0), Quaternion::new(1.0, 0.0, 0.0, 0.0).normalize());
         println!("leg lengths {} {} {} {} {} {}", s.leg_length(0), s.leg_length(1), s.leg_length(2), s.leg_length(3), s.leg_length(4), s.leg_length(5));
-        s.update(Vector3::new(0.0, 0.0, 80.0), Quaternion::new(1.0, 10.0, 0.0, 0.0).normalize());
+        s.update(Vector3::new(0.0, 200.0, 0.0), Quaternion::new(1.0, 10.0, 0.0, 0.0).normalize());
         println!("leg lengths {} {} {} {} {} {}", s.leg_length(0), s.leg_length(1), s.leg_length(2), s.leg_length(3), s.leg_length(4), s.leg_length(5));
         s.update(Vector3::new(0.0, 0.0, 0.0), Quaternion::new(1.0, 0.0, 0.0, 0.0).normalize());
         println!("leg lengths {} {} {} {} {} {}", s.leg_length(0), s.leg_length(1), s.leg_length(2), s.leg_length(3), s.leg_length(4), s.leg_length(5));
